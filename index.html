@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <style>
+      .tab img {
+        height: 30px;
+        padding: 5px;
+        cursor: pointer;
+      }
+
+      .tab:first-child {
+        border-top-left-radius: 0.5rem;
+        border-bottom-left-radius: 0.5rem;
+      }
+
+      .tab:last-child {
+        border-top-right-radius: 0.5rem;
+        border-bottom-right-radius: 0.5rem;
+      }
+
+      .tab.active {
+        background-color: #dbeafe !important;
+      }
+
+      .tab:hover {
+        background-color: #eff6ff;
+      }
+    </style>
+    <script src="tailwindcss-jit-cdn.umd.min.js"></script>
+  </head>
+  <body>
+    <div class="p-4">
+      <div class="tabs flex divide-x">
+        <div class="tab active pr-2" data-service="openweathermap"><img src="openweathermap.png" /></div>
+        <div class="tab pl-2 pr-2" data-service="tomorrow.io"><img src="tomorrow.io.png" /></div>
+        <div class="tab pl-2 pr-2" data-service="visualcrossing"><img src="VisualCrossing.png" /></div>
+        <div class="tab pl-2 pr-2" data-service="aerisweather"><img src="AerisWeather.png" /></div>
+        <div class="tab pl-2" data-service="accuweather"><img src="AccuWeather.png" /></div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (x) => document.querySelector(x);
+      const $$ = (x) => document.querySelectorAll(x);
+
+      const RAPIDAPI_KEY = "70d07480famsh42dec1c0582b8eep14bcc8jsn1a46dda4679d";
+      const OWM_API_KEY = "b0d8bc06b7bc2edc015ac0b7ed5c9d23";
+      const ACCUWEATHER_API_KEY = "xXdEXjAAfdxtasjLYuSXOiGi3O3V1PhV";
+      const AERIS_API_KEY = "XPNgUnhyZhuSd9KYSENOJ";
+      const AERIS_API_SECRET = "iU7Q3aVUTlvGboxGTb4KkbzJEZcDszK1okJ42obY";
+      const VISUAL_CROSSING_API_KEY = "Q6834ZYWGTXVGSZM3NS7TSEAN";
+      const WEATHERBIT_API_KEY = "b24eec0faad04b4c9225e7557873f9b8";
+      const TOMORROWIO_API_KEY = "j2Ku2og81HqXR4bmHjNPPHS1O3QQTcTo";
+
+      const inchToMm = (inch) => inch * 25.4;
+      const inhgToHpa = (inhg) => inhg * 33.86389;
+      const WEATHER_CODES_TO_DESCRIPTIONS = {
+        "0": "Unknown",
+        "1000": "Clear",
+        "1001": "Cloudy",
+        "1100": "Mostly Clear",
+        "1101": "Partly Cloudy",
+        "1102": "Mostly Cloudy",
+        "2000": "Fog",
+        "2100": "Light Fog",
+        "3000": "Light Wind",
+        "3001": "Wind",
+        "3002": "Strong Wind",
+        "4000": "Drizzle",
+        "4001": "Rain",
+        "4200": "Light Rain",
+        "4201": "Heavy Rain",
+        "5000": "Snow",
+        "5001": "Flurries",
+        "5100": "Light Snow",
+        "5101": "Heavy Snow",
+        "6000": "Freezing Drizzle",
+        "6001": "Freezing Rain",
+        "6200": "Light Freezing Rain",
+        "6201": "Heavy Freezing Rain",
+        "7000": "Ice Pellets",
+        "7101": "Heavy Ice Pellets",
+        "7102": "Light Ice Pellets",
+        "8000": "Thunderstorm",
+      };
+
+      const tabs = {
+        openweathermap: {
+          current: {
+            fn: async () => {
+              const current = await (await fetch(`https://api.openweathermap.org/data/2.5/weather?q=Spanish%20Lookout,bz&units=imperial&appid=${OWM_API_KEY}`)).json();
+              return {
+                temperature: current.main.temp,
+                feelsLike: current.main.feels_like.day,
+                humidity: current.main.humidity,
+                pressure: current.main.pressure,
+                cloudiness: current.clouds.all,
+                windDirection: current.wind.deg,
+                windSpeed: current.wind.speed,
+                weather: current.weather[0].description,
+                iconUrl: `https://openweathermap.org/img/wn/${current.weather[0].icon}@2x.png`,
+              };
+            },
+          },
+          daily: {
+            length: 16,
+            fn: async () => {
+              const daily = await (
+                await fetch("https://community-open-weather-map.p.rapidapi.com/forecast/daily?q=Spanish%20Lookout%2Cbz&cnt=16&units=imperial", {
+                  method: "GET",
+                  headers: {
+                    "x-rapidapi-host": "community-open-weather-map.p.rapidapi.com",
+                    "x-rapidapi-key": RAPIDAPI_KEY,
+                  },
+                })
+              ).json();
+              return daily.list.map((item) => {
+                return {
+                  time: item.dt,
+                  temperature: item.temp,
+                  feelsLike: item.feels_like,
+                  humidity: item.humidity,
+                  cloudiness: item.clouds,
+                  rain: item.rain || 0,
+                  precipProb: item.pop * 100,
+                  sunrise: new Date(item.sunrise * 1000).toLocaleTimeString(),
+                  sunset: new Date(item.sunset * 1000).toLocaleTimeString(),
+                  windDirection: item.deg,
+                  windSpeed: item.speed,
+                  windGust: item.gust,
+                  weather: item.weather[0].description,
+                  iconUrl: `https://openweathermap.org/img/wn/${item.weather[0].icon}@2x.png`,
+                };
+              });
+            },
+          },
+          hourly: {
+            length: 2,
+            fn: async () => {
+              const data = await (
+                await fetch(`https://api.openweathermap.org/data/2.5/onecall?lat=17.2760278&lon=-89.0083726&exclude=current,minutely,daily,alerts&units=imperial&appid=${OWM_API_KEY}`)
+              ).json();
+              return data.hourly.map((item) => {
+                return {
+                  time: item.dt,
+                  temperature: item.temp,
+                  feelsLike: item.feels_like,
+                  humidity: item.humidity,
+                  cloudiness: item.clouds,
+                  rain: item.rain ? item.rain["1h"] : 0,
+                  precipProb: item.pop * 100,
+                  windDirection: item.wind_deg,
+                  windSpeed: item.wind_speed,
+                  windGust: item.wind_gust,
+                  weather: item.weather[0].description,
+                  iconUrl: `https://openweathermap.org/img/wn/${item.weather[0].icon}@2x.png`,
+                };
+              });
+            },
+          },
+        },
+        accuweather: {
+          current: {
+            fn: async () => {
+              const data = await (await fetch(`https://dataservice.accuweather.com/currentconditions/v1/27605?apikey=${ACCUWEATHER_API_KEY}&details=true`)).json();
+              console.log(data);
+              return {
+                temperature: data[0].Temperature.Imperial.Value,
+                feelsLike: data[0].RealFeelTemperature.Imperial.Value,
+                humidity: data[0].RelativeHumidity,
+                pressure: data[0].Pressure.Imperial.Value,
+                cloudiness: data[0].CloudCover,
+                windDirection: data[0].Wind.Direction.Degrees,
+                windSpeed: data[0].Wind.Speed.Imperial.Value,
+                weather: data[0].WeatherText,
+                iconUrl: `https://developer.accuweather.com/sites/default/files/${data[0].WeatherIcon.toString().padStart(2, 0)}-s.png`,
+              };
+            },
+          },
+          daily: {
+            length: 5,
+            fn: async () => {
+              const data = await (await fetch(`https://dataservice.accuweather.com/forecasts/v1/daily/5day/27605?apikey=${ACCUWEATHER_API_KEY}&details=true`)).json();
+              console.log(data);
+              return data.DailyForecasts.map((item) => {
+                return {
+                  time: item.Date,
+                  temperature: { min: item.Temperature.Minimum.Value, max: item.Temperature.Maximum.Value },
+                  feelsLike: (item.RealFeelTemperature.Maximum.Value + item.RealFeelTemperature.Minimum.Value) / 2,
+                  humidity: (item.Day.RelativeHumidity + item.Night.RelativeHumidity) / 2,
+                  cloudiness: (item.Day.CloudCover + item.Night.CloudCover) / 2,
+                  rain: inchToMm(item.Day.Rain.Value + item.Night.Rain.Value),
+                  precipProb: Math.max(item.Day.PrecipitationProbability, item.Night.PrecipitationProbability),
+                  sunrise: new Date(item.Sun.EpochRise * 1000),
+                  sunset: new Date(item.Sun.EpochSet * 1000),
+                  windDirection: item.Day.Wind.Direction.Degrees,
+                  windSpeed: item.Day.Wind.Speed.Value,
+                  windGust: item.Day.WindGust.Speed.Value,
+                  weather: item.Day.IconPhrase,
+                  iconUrl: `https://developer.accuweather.com/sites/default/files/${item.Day.Icon.toString().padStart(2, 0)}-s.png`,
+                };
+              });
+            },
+          },
+          hourly: {
+            length: 0.5,
+            fn: async () => {
+              const data = await (await fetch(`https://dataservice.accuweather.com/forecasts/v1/hourly/12hour/27605?apikey=${ACCUWEATHER_API_KEY}&details=true`)).json();
+              return data.map((item) => {
+                return {
+                  time: item.EpochDateTime,
+                  temperature: item.Temperature.Value,
+                  feelsLike: item.RealFeelTemperature.Value,
+                  humidity: item.RelativeHumidity,
+                  cloudiness: item.CloudCover,
+                  rain: inchToMm(item.Rain.Value),
+                  precipProb: item.PrecipitationProbability,
+                  windDirection: item.Wind.Direction.Value,
+                  windSpeed: item.Wind.Speed.Value,
+                  windGust: item.WindGust.Speed.Value,
+                  weather: item.IconPhrase,
+                  iconUrl: `https://developer.accuweather.com/sites/default/files/${item.WeatherIcon.toString().padStart(2, 0)}-s.png`,
+                };
+              });
+            },
+          },
+        },
+        aerisweather: {
+          current: {
+            fn: async () => {
+              const data = (
+                await (await fetch(`https://api.aerisapi.com/observations/closest?p=17.3000016,-89.0092788&radius=70mi&client_id=${AERIS_API_KEY}&client_secret=${AERIS_API_SECRET}`)).json()
+              ).response[0];
+              return {
+                temperature: data.ob.tempF,
+                feelsLike: data.ob.feelslikeF,
+                humidity: data.ob.humidity,
+                pressure: data.ob.pressureMB,
+                cloudiness: data.ob.sky,
+                windDirection: data.ob.windDirDEG,
+                windSpeed: data.ob.windSpeedMPH,
+                windGust: data.ob.windGustMPH,
+                weather: data.ob.weather,
+                iconUrl: `https://cdn.aerisapi.com/wxicons/v2/${data.ob.icon}`,
+              };
+            },
+          },
+          daily: {
+            length: 14,
+            fn: async () => {
+              const data = await (await fetch(`https://api.aerisapi.com/forecasts/spanish%20lookout,bz?limit=14&client_id=${AERIS_API_KEY}&client_secret=${AERIS_API_SECRET}`)).json();
+              console.log(data);
+              return data.response[0].periods.map((item) => {
+                return {
+                  time: item.timestamp,
+                  temperature: { min: item.minTempF, max: item.maxTempF },
+                  feelsLike: item.feelslikeF,
+                  humidity: item.humidity,
+                  cloudiness: item.sky,
+                  rain: item.precipMM,
+                  precipProb: item.pop,
+                  sunrise: new Date(item.sunrise * 1000).toLocaleTimeString(),
+                  sunset: new Date(item.sunset * 1000).toLocaleTimeString(),
+                  windDirection: item.windDirDEG,
+                  windSpeed: item.windSpeedMPH,
+                  windGust: item.windGustMPH,
+                  weather: item.weather,
+                  iconUrl: `https://cdn.aerisapi.com/wxicons/v2/${item.icon}`,
+                };
+              });
+            },
+          },
+          hourly: {
+            length: 24,
+            fn: async () => {
+              const data = await (await fetch(`https://api.aerisapi.com/forecasts/spanish%20lookout,bz?limit=999&filter=1h&client_id=${AERIS_API_KEY}&client_secret=${AERIS_API_SECRET}`)).json();
+              console.log(data);
+              return data.response[0].periods.map((item) => {
+                return {
+                  time: item.timestamp,
+                  temperature: item.tempF,
+                  feelsLike: item.feelslikeF,
+                  humidity: item.humidity,
+                  cloudiness: item.sky,
+                  rain: item.precipMM,
+                  precipProb: item.pop,
+                  windDirection: item.windDirDEG,
+                  windSpeed: item.windSpeedMPH,
+                  windGust: item.windGustMPH,
+                  weather: item.weather,
+                  iconUrl: `https://cdn.aerisapi.com/wxicons/v2/${item.icon}`,
+                };
+              });
+            },
+          },
+        },
+        visualcrossing: {
+          current: {
+            fn: async () => {
+              const data = (
+                await (
+                  await fetch(
+                    `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/Spanish%20Lookout%2C%20Belize?unitGroup=us&key=${VISUAL_CROSSING_API_KEY}&include=current`
+                  )
+                ).json()
+              ).currentConditions;
+              return {
+                temperature: data.temp,
+                feelsLike: data.feelslike,
+                humidity: data.humidity,
+                pressure: data.pressure,
+                cloudiness: data.cloudcover,
+                windDirection: data.winddir,
+                windSpeed: data.windspeed,
+                windGust: data.windgust,
+                weather: data.conditions,
+                iconUrl: `https://raw.githubusercontent.com/visualcrossing/WeatherIcons/main/PNG/1st%20Set%20-%20Color/${data.icon}.png`,
+              };
+            },
+          },
+          daily: {
+            length: 15,
+            fn: async () => {
+              const data = await (await fetch(`https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/Spanish%20Lookout%2C%20Belize?unitGroup=us&key=${VISUAL_CROSSING_API_KEY}&include=fcst`)).json();
+              return data.days.map((item) => {
+                return {
+                  time: item.datetimeEpoch,
+                  temperature: { min: item.tempmin, max: item.tempmax },
+                  feelsLike: item.feelslike,
+                  humidity: item.humidity,
+                  cloudiness: item.cloudcover,
+                  rain: item.precip,
+                  precipProb: item.precipprob,
+                  sunrise: new Date(item.sunriseEpoch * 1000).toLocaleTimeString(),
+                  sunset: new Date(item.sunsetEpoch * 1000).toLocaleTimeString(),
+                  windDirection: item.winddir,
+                  windSpeed: item.windspeed,
+                  windGust: item.windgust,
+                  weather: item.conditions,
+                  iconUrl: `https://raw.githubusercontent.com/visualcrossing/WeatherIcons/main/PNG/1st%20Set%20-%20Color/${item.icon}.png`,
+                };
+              });
+            },
+          },
+        },
+        weatherbit: {
+          current: {
+            fn: async () => {
+              const data = (
+                await (await fetch(`https://api.weatherbit.io/v2.0/current?lat=17.3000016&lon=-89.0092788&units=I&key=${WEATHERBIT_API_KEY}`)).json()
+              ).data[0];
+              return {
+                temperature: data.temp,
+                feelsLike: data.app_temp,
+                humidity: data.rh,
+                pressure: data.pres,
+                cloudiness: data.clouds,
+                windDirection: data.wind_dir,
+                windSpeed: data.wind_spd,
+                weather: data.weather.description,
+                iconUrl: `https://www.weatherbit.io/static/img/icons/${data.weather.icon}.png`,
+              };
+            },
+          },
+          daily: {
+            length: 16,
+            fn: async () => {
+              const data = await (await fetch(`https://api.weatherbit.io/v2.0/forecast/daily?lat=17.3000016&lon=-89.0092788&units=I&key=${WEATHERBIT_API_KEY}`)).json();
+              return data.data.map((item) => {
+                return {
+                  time: item.ts,
+                  temperature: { min: item.min_temp, max: item.max_temp },
+                  feelsLike: (item.app_min_temp + item.app_max_temp) / 2,
+                  humidity: item.rh,
+                  cloudiness: item.clouds,
+                  rain: inchToMm(item.precip),
+                  precipProb: item.pop,
+                  sunrise: new Date(item.sunrise_ts * 1000).toLocaleTimeString(),
+                  sunset: new Date(item.sunset_ts * 1000).toLocaleTimeString(),
+                  windDirection: item.wind_dir,
+                  windSpeed: item.wind_spd,
+                  windGust: item.wind_gust_spd,
+                  weather: item.weather.description,
+                  iconUrl: `https://www.weatherbit.io/static/img/icons/${item.weather.icon}.png`,
+                };
+              });
+            },
+          },
+        },
+        tomorrowio: {
+          current: {
+            fn: async () => {
+              const data = (
+                await (await fetch(`https://api.tomorrow.io/v4/timelines?location=17.3000016,-89.0092788&fields=temperature,temperatureApparent,humidity,pressureSurfaceLevel,cloudCover,windDirection,windSpeed,windGust,weatherCode&units=imperial&timesteps=current&apikey=${TOMORROWIO_API_KEY}`)).json()
+              ).data.timelines[0].intervals[0].values;
+              return {
+                temperature: data.temperature,
+                feelsLike: data.temperatureApparent,
+                humidity: data.humidity,
+                pressure: inhgToHpa(data.pressureSurfaceLevel),
+                cloudiness: data.cloudCover,
+                windDirection: data.windDirection,
+                windSpeed: data.windSpeed,
+                windGust: data.windGust,
+                weather: WEATHER_CODES_TO_DESCRIPTIONS[data.weatherCode],
+                iconUrl: data.weatherCode,
+              };
+            },
+          },
+          daily: {
+            length: 15,
+            fn: async () => {
+              const data = await (await fetch(`https://api.tomorrow.io/v4/timelines?location=17.3000016,-89.0092788&fields=temperature,temperatureApparent,humidity,cloudCover,rainAccumulation,precipitationProbability,sunriseTime,sunsetTime,windDirection,windSpeed,windGust,weatherCode&units=imperial&timesteps=1d&apikey=${TOMORROWIO_API_KEY}`)).json();
+              return data.data.timelines[0].intervals.map(({ values: item, startTime }) => {
+                return {
+                  time: new Date(startTime).getTime() / 1000,
+                  temperature: item.temperature,
+                  feelsLike: item.temperatureApparent,
+                  humidity: item.humidity,
+                  cloudiness: item.cloudCover,
+                  rain: inchToMm(item.rainAccumulation),
+                  precipProb: item.precipitationProbability,
+                  sunrise: new Date(item.sunriseTime).toLocaleTimeString(),
+                  sunset: new Date(item.sunsetTime).toLocaleTimeString(),
+                  windDirection: item.windDirection,
+                  windSpeed: item.windSpeed,
+                  windGust: item.windGust,
+                  weather: WEATHER_CODES_TO_DESCRIPTIONS[item.weatherCode],
+                  iconUrl: item.weatherCode,
+                };
+              });
+            },
+          },
+        },
+      };
+
+      let activeTab = "openweathermap";
+
+      $$(".tab").forEach((x) =>
+        x.addEventListener("click", () => {
+          $(".active").classList.remove("active");
+          x.classList.add("active");
+          activeTab = x.dataset.service;
+        })
+      );
+    </script>
+  </body>
+</html>
